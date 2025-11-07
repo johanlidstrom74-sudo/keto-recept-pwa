@@ -61,6 +61,10 @@
 
     // --- Näringsberäkning (enkla approx) per 100 g ---
     const NUTRITION_DB = {
+      // I NUTRITION_DB (överst i index.html)
+"champinjoner": { per100: { kcal: 22, p: 3.1, f: 0.3, c: 3.3, fi: 1.0 } },
+"bacon": { unit:"slice", g_per_slice:8, per100:{ kcal:500, p:37, f:39, c:1, fi:0 } },
+
       "ägg": {unit:"piece", g_per_piece:50, per100:{kcal:140,p:12.5,f:9.5,c:1,fi:0}},
       "smör": {per100:{kcal:720,p:1,f:81,c:1,fi:0}},
       "vispgrädde": {per100:{kcal:350,p:2,f:35,c:3,fi:0}},
@@ -97,6 +101,7 @@
       "bacon": {unit:"slice", g_per_slice:8, per100:{kcal:500,p:37,f:39,c:1,fi:0}},
       "fetaost": {per100:{kcal:265,p:14,f:21,c:4,fi:0}},
       "oliver": {per100:{kcal:145,p:1,f:15,c:1,fi:3}}
+      
     };
     const UNIT_TO_G = { g:1, gram:1, gr:1, kg:1000, ml:1, dl:100, msk:15, tsk:5, tbsp:15, tsp:5, st:1 };
     function guessFoodKey(text){ const t = (text||'').toLowerCase(); return Object.keys(NUTRITION_DB).find(k => t.includes(k)); }
