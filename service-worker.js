@@ -1,5 +1,5 @@
 // bump cache to force redeploy
-const CACHE_NAME = 'keto-simple-v5'; // <- ändra v4 -> v5
+const CACHE_NAME = 'keto-simple-v6'; // <- ändra v5 -> v6
 const PRECACHE = [
   './',
   './index.html',
