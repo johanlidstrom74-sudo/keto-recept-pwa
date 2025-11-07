@@ -1,4 +1,5 @@
-const CACHE_NAME = 'keto-pwa-simple-v1';
+// bump cache to force redeploy
+const CACHE_NAME = 'keto-simple-v5'; // <- ändra v4 -> v5
 const PRECACHE = [
   './',
   './index.html',
