@@ -6,6 +6,7 @@
   <title>Keto Recept-Slumpare</title>
   <meta name="theme-color" content="#10B981" />
   <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -27,153 +28,269 @@
   </script>
 
   <script type="text/babel">
-    const { useState, useMemo } = React;
+    const { useState, useMemo, useEffect } = React;
 
-    // ===== Helpers =====
-    function toNumberSV(token){const t=String(token).trim();if(!t)return NaN;if(t.includes('/')){const[a,b]=t.split('/');const na=parseFloat(a.replace(',','.'));const nb=parseFloat(b.replace(',','.'));if(!isNaN(na)&&!isNaN(nb)&&nb!==0)return na/nb;}const n=parseFloat(t.replace(',','.'));return isNaN(n)?NaN:n;}
-    function formatNumberSV(n){return new Intl.NumberFormat('sv-SE',{maximumFractionDigits:1}).format(n);}
-    function scaleLine(line,f){const raw=String(line);const parts=raw.trim().split(' ').filter(Boolean);const first=parts[0];const qty=toNumberSV(first);if(isNaN(qty))return raw;const rest=raw.slice(raw.indexOf(first)+first.length).trimStart();return `${formatNumberSV(qty*f)} ${rest}`;}
-    function scaleIngredients(arr,f){try{return arr.map(r=>scaleLine(r,f));}catch{return arr;}}
+    // --- Hjälp för sv-tal + ingrediensskalning ---
+    function toNumberSV(token) {
+      const t = String(token).trim();
+      if (!t) return NaN;
+      if (t.includes('/')) {
+        const [a,b] = t.split('/');
+        const na = parseFloat(String(a).replace(',','.'));
+        const nb = parseFloat(String(b).replace(',','.'));
+        if (!isNaN(na) && !isNaN(nb) && nb!==0) return na/nb;
+      }
+      const n = parseFloat(t.replace(',','.'));
+      return isNaN(n) ? NaN : n;
+    }
+    function formatNumberSV(num) {
+      return new Intl.NumberFormat('sv-SE',{maximumFractionDigits:1}).format(num);
+    }
+    function scaleLine(line, factor) {
+      const raw = String(line);
+      const parts = raw.trim().split(' ').filter(Boolean);
+      const first = parts[0];
+      const qty = toNumberSV(first);
+      if (isNaN(qty)) return raw;
+      const rest = raw.slice(raw.indexOf(first)+first.length).trimStart();
+      return `${formatNumberSV(qty*factor)} ${rest}`;
+    }
+    function scaleIngredients(ingredients, factor) {
+      try { return ingredients.map(r => scaleLine(r, factor)); } catch { return ingredients; }
+    }
 
-    const NUTRITION_DB={
-      "ägg":{unit:"piece",g_per_piece:50,per100:{kcal:140,p:12.5,f:9.5,c:1,fi:0}},
-      "smör":{per100:{kcal:720,p:1,f:81,c:1,fi:0}},
-      "majonnäs":{per100:{kcal:700,p:1,f:78,c:1,fi:0}},
-      "ost":{per100:{kcal:380,p:25,f:30,c:1,fi:0}},
-      "lax":{per100:{kcal:206,p:22,f:13,c:0,fi:0}},
-      "fetaost":{per100:{kcal:265,p:14,f:21,c:4,fi:0}},
-      "olivolja":{per100:{kcal:900,p:0,f:100,c:0,fi:0}},
-      "turkisk yoghurt":{per100:{kcal:100,p:4,f:9,c:3,fi:0}},
-      "valnötter":{per100:{kcal:654,p:15,f:65,c:14,fi:7}},
-      "avokado":{per100:{kcal:160,p:2,f:15,c:9,fi:7}},
-      "zucchini":{per100:{kcal:17,p:1.2,f:0.3,c:3,fi:1}},
-      "vitkål":{per100:{kcal:25,p:1,f:0,c:6,fi:2.5}},
-      "räkor":{per100:{kcal:105,p:21,f:1,c:0,fi:0}},
-      "kyckling":{per100:{kcal:165,p:31,f:3.6,c:0,fi:0}},
-      "nötfärs":{per100:{kcal:250,p:18,f:20,c:0,fi:0}},
-      "halloumi":{per100:{kcal:320,p:22,f:26,c:2,fi:0}},
-      "keso":{per100:{kcal:90,p:12,f:4,c:2,fi:0}}
+    // --- Näringsberäkning (enkla approx) per 100 g ---
+    const NUTRITION_DB = {
+      "ägg": {unit:"piece", g_per_piece:50, per100:{kcal:140,p:12.5,f:9.5,c:1,fi:0}},
+      "smör": {per100:{kcal:720,p:1,f:81,c:1,fi:0}},
+      "vispgrädde": {per100:{kcal:350,p:2,f:35,c:3,fi:0}},
+      "grädde": {per100:{kcal:350,p:2,f:35,c:3,fi:0}},
+      "crème fraiche": {per100:{kcal:300,p:2.5,f:30,c:3,fi:0}},
+      "färskost": {per100:{kcal:250,p:6,f:23,c:3,fi:0}},
+      "ost": {per100:{kcal:380,p:25,f:30,c:1,fi:0}},
+      "parmesan": {per100:{kcal:390,p:35,f:26,c:0,fi:0}},
+      "halloumi": {per100:{kcal:320,p:22,f:26,c:2,fi:0}},
+      "majonnäs": {per100:{kcal:700,p:1,f:78,c:1,fi:0}},
+      "olivolja": {per100:{kcal:900,p:0,f:100,c:0,fi:0}},
+      "turkisk yoghurt": {per100:{kcal:100,p:4,f:9,c:3,fi:0}},
+      "grekisk yoghurt": {per100:{kcal:95,p:5,f:9,c:3,fi:0}},
+      "keso": {per100:{kcal:90,p:12,f:4,c:2,fi:0}},
+      "chiafrön": {per100:{kcal:486,p:17,f:31,c:42,fi:34}},
+      "solrosfrön": {per100:{kcal:580,p:20,f:50,c:20,fi:8}},
+      "valnötter": {per100:{kcal:654,p:15,f:65,c:14,fi:7}},
+      "avokado": {per100:{kcal:160,p:2,f:15,c:9,fi:7}},
+      "gurka": {per100:{kcal:16,p:1,f:0,c:3,fi:0.5}},
+      "tomat": {per100:{kcal:18,p:1,f:0,c:4,fi:1.2}},
+      "paprika": {per100:{kcal:31,p:1,f:0,c:6,fi:2}},
+      "spenat": {per100:{kcal:23,p:3,f:0,c:1,fi:2.2}},
+      "vitkål": {per100:{kcal:25,p:1,f:0,c:6,fi:2.5}},
+      "broccoli": {per100:{kcal:35,p:3,f:0,c:7,fi:3}},
+      "zucchini": {per100:{kcal:17,p:1.2,f:0.3,c:3,fi:1}},
+      "selleri": {per100:{kcal:16,p:0.7,f:0.2,c:3,fi:1.6}},
+      "räkor": {per100:{kcal:105,p:21,f:1,c:0,fi:0}},
+      "lax": {per100:{kcal:206,p:22,f:13,c:0,fi:0}},
+      "torsk": {per100:{kcal:82,p:18,f:0.7,c:0,fi:0}},
+      "nötfärs": {per100:{kcal:250,p:18,f:20,c:0,fi:0}},
+      "blandfärs": {per100:{kcal:230,p:17,f:18,c:0,fi:0}},
+      "kyckling": {per100:{kcal:165,p:31,f:3.6,c:0,fi:0}},
+      "fläskfilé": {per100:{kcal:145,p:21,f:6,c:0,fi:0}},
+      "bacon": {unit:"slice", g_per_slice:8, per100:{kcal:500,p:37,f:39,c:1,fi:0}},
+      "fetaost": {per100:{kcal:265,p:14,f:21,c:4,fi:0}},
+      "oliver": {per100:{kcal:145,p:1,f:15,c:1,fi:3}}
     };
-    const UNIT_TO_G={g:1,gram:1,gr:1,kg:1000,ml:1,dl:100,msk:15,tsk:5,st:1};
-    function guessFoodKey(t){const s=(t||'').toLowerCase();return Object.keys(NUTRITION_DB).find(k=>s.includes(k));}
-    function toGrams(t){const s=(t||'').toLowerCase();if(s.includes('ägg'))return{grams:(toNumberSV(s)||1)*(NUTRITION_DB['ägg']?.g_per_piece||50)};const m=s.match(/(\d+[\/,\.]?\d*)\s*(kg|g|gram|gr|dl|ml|msk|tsk|st)?/);if(m){const q=toNumberSV(m[1]);const u=(m[2]||'g');const f=UNIT_TO_G[u]??1;return{grams:q*f}}return{grams:0}}
-    function sumNutrition(ings){const total={kcal:0,p:0,f:0,c:0,fi:0};for(const row of ings){const key=guessFoodKey(row);if(!key)continue;const g=Math.max(0,toGrams(row).grams);const x=NUTRITION_DB[key].per100;total.kcal+=x.kcal*g/100;total.p+=x.p*g/100;total.f+=x.f*g/100;total.c+=x.c*g/100;total.fi+=x.fi*g/100;}return total;}
+    const UNIT_TO_G = { g:1, gram:1, gr:1, kg:1000, ml:1, dl:100, msk:15, tsk:5, tbsp:15, tsp:5, st:1 };
+    function guessFoodKey(text){ const t = (text||'').toLowerCase(); return Object.keys(NUTRITION_DB).find(k => t.includes(k)); }
+    function toGrams(text){
+      const t = (text||'').toLowerCase();
+      if (t.includes('ägg')) return { grams: (toNumberSV(t)||1) * (NUTRITION_DB['ägg']?.g_per_piece||50) };
+      if (t.includes('baconskiv')) return { grams: (toNumberSV(t)||1) * (NUTRITION_DB['bacon']?.g_per_slice||8) };
+      if ((t.includes('ostskiv')) || (t.includes('skiva') && t.includes('ost'))) return { grams: (toNumberSV(t)||1) * 20 };
+      const m = t.match(/(\d+[\/,\.]?\d*)\s*(kg|g|gram|gr|dl|ml|msk|tsk|tbsp|tsp|st)?/);
+      if (m){ const qty = toNumberSV(m[1]); const unit = (m[2]||'g'); const f = UNIT_TO_G[unit] ?? 1; return { grams: qty*f }; }
+      return { grams: 0 };
+    }
+    function sumNutrition(ingredients){
+      const total = {kcal:0,p:0,f:0,c:0,fi:0};
+      for (const row of ingredients){
+        const key = guessFoodKey(row); if (!key) continue;
+        const g = Math.max(0, toGrams(row).grams);
+        const x = NUTRITION_DB[key].per100;
+        total.kcal += x.kcal*g/100; total.p += x.p*g/100; total.f += x.f*g/100; total.c += x.c*g/100; total.fi += x.fi*g/100;
+      }
+      return total;
+    }
 
-    // ===== Recept =====
-    const RECIPES=[
-      // FRUKOST
-      {id:"f1",title:"Äggröra med smör & gräslök",type:"frukost",servings:1,ingredients:["2 ägg","15 g smör","1 msk gräslök, finhackad","Salt & peppar"],steps:["Vispa ägg med lite salt.","Smält smör låg/medel.","Häll i ägg, rör krämigt.","Toppa med gräslök och peppar."]},
-      {id:"f2",title:"Omelett med ost",type:"frukost",servings:1,ingredients:["2 ägg","20 g riven ost","10 g smör","Salt & peppar"],steps:["Vispa ägg.","Stek i smör.","På med ost, vik."]},
-      {id:"f3",title:"Avokado-båt med ägg",type:"frukost",servings:1,ingredients:["1 avokado","1 ägg","Salt & peppar"],steps:["Dela avokado, öka gropen.","Knäck ägg i grop.","Baka 12–14 min i 200°C."]},
-
-      // LUNCH
-      {id:"l1",title:"Tonfiskröra i salladsblad",type:"lunch",servings:1,ingredients:["1 burk tonfisk, avrunnen","2 msk majonnäs","Romansalladsblad","Salt & peppar"],steps:["Blanda tonfisk + majonnäs.","Fyll salladsblad."]},
-      {id:"l2",title:"Zoodles med pesto & parmesan",type:"lunch",servings:1,ingredients:["200 g zucchini, spiraliserad","1 msk olivolja","1 msk pesto (utan socker)","10 g parmesan, riven","Salt"],steps:["Fräs zoodles 1–2 min i olja.","Vänd ner pesto och toppa parmesan."]},
-      {id:"l3",title:"Räksallad med citron",type:"lunch",servings:1,ingredients:["150 g räkor, skalade","1,5 msk majonnäs","30 g avokado, tärnad","10 g selleri, finhackad","Citron, salt & peppar"],steps:["Blanda allt, smaka av med citron."]},
-
-      // MIDDAG
-      {id:"m1",title:"Ugnslax med citron & smör",type:"middag",servings:2,ingredients:["2 laxfiléer (à 120 g)","30 g smör","Citron","Salt & peppar"],steps:["200°C ugn.","Salta/peppra lax, smör & citron.","Baka 12–15 min."]},
-      {id:"m2",title:"Nötfärs med smörstekt vitkål",type:"middag",servings:2,ingredients:["300 g nötfärs","200 g vitkål, strimlad","20 g smör","Salt & peppar"],steps:["Stek färs.","Smörstek vitkål mjuk.","Servera ihop."]},
-      {id:"m3",title:"Torsk med smör & zucchini",type:"middag",servings:2,ingredients:["320 g torsk","150 g zucchini, skivor","20 g smör","Salt & peppar"],steps:["Stek zucchini.","Stek torsk varsamt.","Smaka av."]},
-
-      // SNACKS
-      {id:"s1",title:"Ostchips",type:"snacks",servings:2,ingredients:["60 g riven ost"],steps:["200°C ugn.","Små osthögar på plåt.","5–7 min."]},
-      {id:"s2",title:"Selleristavar med färskost",type:"snacks",servings:1,ingredients:["100 g selleri, stavar","40 g färskost"],steps:["Dippa och ät."]},
-      {id:"s3",title:"Chiapudding mini",type:"snacks",servings:1,ingredients:["120 g turkisk yoghurt","10 g chiafrön"],steps:["Rör ihop, låt svälla 15–20 min."]}
+    // --- Receptdata (kortad lista; kan utökas) ---
+    const RECIPES = [
+      {id:"f1",title:"Äggröra med smör och gräslök",type:"frukost",servings:1,
+        ingredients:["2 ägg","15 g smör","1 msk finhackad gräslök","Salt & peppar"],
+        steps:["Vispa äggen lätt med en nypa salt.","Smält smör låg/medelvärme.","Häll i äggen och rör långsamt krämigt.","Vänd ner gräslök och peppar."]},
+      {id:"l1",title:"Tonfiskröra i salladsblad",type:"lunch",servings:1,
+        ingredients:["1 burk tonfisk, avrunnen","2 msk majonnäs","Romansalladsblad","Salt & peppar"],
+        steps:["Blanda tonfisk och majonnäs.","Smaka av och fyll i salladsblad."]},
+      {id:"m1",title:"Ugnslax med citron & smör",type:"middag",servings:2,
+        ingredients:["2 laxfiléer","30 g smör","Citron","Salt & peppar"],
+        steps:["200°C ugn.","Lägg lax i form, salta/peppra, smör & citron.","Baka 12–15 min."]},
+      {id:"s1",title:"Ostchips i ugn",type:"snacks",servings:2,
+        ingredients:["60 g riven ost"],
+        steps:["200°C ugn.","Små högar ost på plåt.","Baka 5–7 min."]}
     ];
 
-    // ===== App =====
-    function App(){
-      const [mealType,setMealType]=useState("frukost");
-      const [current,setCurrent]=useState(null);
-      const [lastId,setLastId]=useState(null);
-      const [servings,setServings]=useState(1);
+    const TYPES = [
+      {key:"frukost", label:"Frukost"},
+      {key:"lunch",   label:"Lunch"},
+      {key:"middag",  label:"Middag"},
+      {key:"snacks",  label:"Snacks"}
+    ];
 
-      const filtered=useMemo(()=>RECIPES.filter(r=>r.type===mealType),[mealType]);
+    function useLocalStorage(key, initial) {
+      const [value, setValue] = React.useState(() => {
+        try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : initial; }
+        catch { return initial; }
+      });
+      React.useEffect(() => { try { localStorage.setItem(key, JSON.stringify(value)); } catch{} }, [key, value]);
+      return [value, setValue];
+    }
 
-      const randomize=()=>{
-        if(!filtered.length) return;
-        let pick;
-        for(let i=0;i<10;i++){
-          const cand=filtered[Math.floor(Math.random()*filtered.length)];
-          if(!lastId || cand.id!==lastId){pick=cand;break;}
-          pick=cand;
-        }
-        setCurrent(pick); setLastId(pick.id);
+    function RecipeCard({ recipe, servings, ingredients, perPortion, onToggleFavorite, isFavorite }) {
+      if (!recipe) return null;
+      const copyText = () => {
+        const text =
+`${recipe.title}
+
+Portioner: ${servings}
+
+Ingredienser:
+- ${ingredients.join("\n- ")}
+
+Gör så här:
+${recipe.steps.map((s,i)=>`${i+1}. ${s}`).join("\n")}
+
+Näring per portion (≈): ${Math.round(perPortion.kcal)} kcal, Protein ${perPortion.p.toFixed(1)} g, Fett ${perPortion.f.toFixed(1)} g, Kolhydrater ${perPortion.c.toFixed(1)} g, Fibrer ${perPortion.fi.toFixed(1)} g`;
+        navigator.clipboard.writeText(text).catch(()=>{});
       };
+      return (
+        <div className="rounded-2xl shadow p-5 bg-white border border-gray-100">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold">{recipe.title}</h2>
+              <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-gray-100">
+                {recipe.type.charAt(0).toUpperCase()+recipe.type.slice(1)}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={copyText} className="text-sm px-3 py-1 rounded-lg border hover:bg-gray-50">Kopiera</button>
+              <button onClick={onToggleFavorite} className={`text-sm px-3 py-1 rounded-lg border hover:bg-gray-50 ${isFavorite ? "bg-yellow-100":""}`}>{isFavorite ? "★":"☆"}</button>
+            </div>
+          </div>
 
-      const factor=current ? (servings/(current.servings||1)) : 1;
-      const scaled=current ? scaleIngredients(current.ingredients,factor) : [];
-      const total=current ? sumNutrition(scaled) : {kcal:0,p:0,f:0,c:0,fi:0};
-      const per=servings ? {kcal:total.kcal/servings,p:total.p/servings,f:total.f/servings,c:total.c/servings,fi:total.fi/servings} : total;
+          <div className="mt-3 text-sm">
+            <div className="inline-flex flex-wrap items-center gap-3 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-100">
+              <span className="opacity-70">Näring / portion (≈)</span>
+              <span className="font-medium">Energi: {Math.round(perPortion.kcal)} kcal</span>
+              <span>Protein: {perPortion.p.toFixed(1)} g</span>
+              <span>Fett: {perPortion.f.toFixed(1)} g</span>
+              <span>Kolhydrater: {perPortion.c.toFixed(1)} g</span>
+              <span>Fibrer: {perPortion.fi.toFixed(1)} g</span>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4 mt-4">
+            <div>
+              <h3 className="font-semibold mb-1">Ingredienser</h3>
+              <ul className="list-disc pl-5 space-y-1">
+                {ingredients.map((it,i)=>(<li key={i}>{it}</li>))}
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-1">Gör så här</h3>
+              <ol className="list-decimal pl-5 space-y-1">
+                {recipe.steps.map((it,i)=>(<li key={i}>{it}</li>))}
+              </ol>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function App(){
+      const [mealType, setMealType] = useState("frukost");
+      const [current, setCurrent] = useState(null);
+      const [servings, setServings] = useState(1);
+      const [favorites, setFavorites] = useLocalStorage("keto-favorites", []);
+
+      const filtered = useMemo(()=>RECIPES.filter(r=>r.type===mealType),[mealType]);
+      const randomize = () => {
+        if (!filtered.length) return;
+        const idx = Math.floor(Math.random()*filtered.length);
+        setCurrent(filtered[idx]); // behåller valt portionsantal
+      };
+      const toggleFavorite = () => {
+        if (!current) return;
+        setFavorites(prev=>{
+          const exist = prev.find(r=>r.id===current.id);
+          return exist ? prev.filter(r=>r.id!==current.id) : [...prev, current];
+        });
+      };
+      const isFavorite = current && favorites.some(r=>r.id===current.id);
+
+      const factor = current ? (servings / (current.servings || 1)) : 1;
+      const scaledIngredients = current ? scaleIngredients(current.ingredients, factor) : [];
+      const total = current ? sumNutrition(scaledIngredients) : {kcal:0,p:0,f:0,c:0,fi:0};
+      const perPortion = servings ? {
+        kcal: total.kcal/servings, p: total.p/servings, f: total.f/servings,
+        c: total.c/servings, fi: total.fi/servings
+      } : total;
 
       return (
-        <div className="p-6 max-w-3xl mx-auto">
-          <div className="mb-6 text-center">
-            <h1 className="text-3xl font-bold">Keto Recept-Slumpare 🥑🍳🧀</h1>
-            <p className="text-sm opacity-70 mt-1">Välj måltid och klicka “Slumpa recept”.</p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            {["frukost","lunch","middag","snacks"].map(k=>(
-              <button key={k} onClick={()=>setMealType(k)}
-                className={`px-3 py-1.5 rounded-full border text-sm ${mealType===k?"bg-white shadow":"bg-gray-100"}`}>
-                {k[0].toUpperCase()+k.slice(1)}
-              </button>
-            ))}
-            <div className="ml-auto flex items-center gap-2 text-sm">
-              <span className="opacity-70">Portioner</span>
-              <button onClick={()=>setServings(s=>Math.max(1,(s||1)-1))} className="px-2 py-1 rounded-lg border">−</button>
-              <input type="number" min="1" max="12" value={servings}
-                onChange={e=>setServings(Math.max(1,Math.min(12,Number(e.target.value)||1)))}
-                className="w-16 text-center px-2 py-1 rounded-lg border bg-white" />
-              <button onClick={()=>setServings(s=>Math.min(12,(s||1)+1))} className="px-2 py-1 rounded-lg border">+</button>
-              <button onClick={randomize} className="ml-2 px-4 py-2 rounded-xl bg-black text-white">Slumpa recept</button>
+        <div className="relative min-h-screen text-slate-900 p-6">
+          <div className="relative max-w-3xl mx-auto bg-white/90 backdrop-blur-sm rounded-2xl p-5 shadow">
+            <div className="mb-6 text-center">
+              <h1 className="text-3xl font-bold">Keto Recept-Slumpare 🥑🍳🧀</h1>
+              <p className="text-sm opacity-70 mt-1">Välj måltid och klicka “Slumpa recept”.</p>
             </div>
-          </div>
 
-          {!current && <div className="rounded-2xl border border-dashed p-6 bg-white/60 text-center text-sm">
-            Välj måltid och klicka <span className="font-semibold">Slumpa recept</span>.
-          </div>}
-
-          {current && (
-            <div className="rounded-2xl shadow p-5 bg-white border border-gray-100">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-semibold">{current.title}</h2>
-                  <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-gray-100">
-                    {current.type.charAt(0).toUpperCase()+current.type.slice(1)}
-                  </span>
-                </div>
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  {key:"frukost",label:"Frukost"},
+                  {key:"lunch",label:"Lunch"},
+                  {key:"middag",label:"Middag"},
+                  {key:"snacks",label:"Snacks"},
+                ].map(t=>(
+                  <button key={t.key} onClick={()=>setMealType(t.key)}
+                    className={`px-3 py-1.5 rounded-full border text-sm hover:bg-white ${mealType===t.key?"bg-white shadow":"bg-gray-100"}`}>{t.label}</button>
+                ))}
               </div>
 
-              <div className="mt-3 text-sm">
-                <div className="inline-flex flex-wrap items-center gap-3 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-100">
-                  <span className="opacity-70">Näring / portion (≈)</span>
-                  <span className="font-medium">Energi: {Math.round(per.kcal)} kcal</span>
-                  <span>Protein: {per.p.toFixed(1)} g</span>
-                  <span>Fett: {per.f.toFixed(1)} g</span>
-                  <span>Kolhydrater: {per.c.toFixed(1)} g</span>
-                  <span>Fibrer: {per.fi.toFixed(1)} g</span>
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <h3 className="font-semibold mb-1">Ingredienser</h3>
-                  <ul className="list-disc pl-5 space-y-1">
-                    {scaled.map((it,i)=><li key={i}>{it}</li>)}
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="font-semibold mb-1">Gör så här</h3>
-                  <ol className="list-decimal pl-5 space-y-1">
-                    {current.steps.map((it,i)=><li key={i}>{it}</li>)}
-                  </ol>
-                </div>
+              <div className="ml-auto flex items-center gap-2 text-sm">
+                <span className="opacity-70">Portioner</span>
+                <button onClick={()=>setServings(s=>Math.max(1,(s||1)-1))} className="px-2 py-1 rounded-lg border hover:bg-gray-50">−</button>
+                <input type="number" min="1" max="12" value={servings}
+                       onChange={(e)=>setServings(Math.max(1,Math.min(12, Number(e.target.value)||1)))}
+                       className="w-16 text-center px-2 py-1 rounded-lg border bg-white" />
+                <button onClick={()=>setServings(s=>Math.min(12,(s||1)+1))} className="px-2 py-1 rounded-lg border hover:bg-gray-50">+</button>
+                <button onClick={randomize} className="ml-2 px-4 py-2 rounded-xl bg-black text-white hover:opacity-90">Slumpa recept</button>
               </div>
             </div>
-          )}
+
+            {!current && (
+              <div className="rounded-2xl border border-dashed p-6 bg-white/60 text-center text-sm">
+                Välj måltidstyp ovan och klicka <span className="font-semibold">Slumpa recept</span>.
+              </div>
+            )}
+
+            {current && (
+              <RecipeCard
+                recipe={current}
+                servings={servings}
+                ingredients={scaledIngredients}
+                perPortion={perPortion}
+                onToggleFavorite={toggleFavorite}
+                isFavorite={isFavorite}
+              />
+            )}
+          </div>
         </div>
       );
     }
